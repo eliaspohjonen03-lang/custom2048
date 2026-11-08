@@ -57,6 +57,20 @@ export async function saveLevelImage(pid, v, orig, cr) {
 export async function removeLevelImage(pid, v) {
   await imgDB.del(pid + ':' + v); await imgDB.del(pid + ':' + v + ':o');
 }
+// Vaihtaa kahden tason kuvat keskenään (myös tyhjän tason kanssa).
+export async function swapLevels(pid, a, b) {
+  if (a === b) return;
+  const keys = v => [pid + ':' + v, pid + ':' + v + ':o'];
+  const [ka, kb] = [keys(a), keys(b)];
+  const va = await Promise.all(ka.map(k => imgDB.get(k)));
+  const vb = await Promise.all(kb.map(k => imgDB.get(k)));
+  const write = (k, val) => val == null ? imgDB.del(k) : imgDB.put(k, val);
+  for (let i = 0; i < 2; i++) { await write(ka[i], vb[i]); await write(kb[i], va[i]); }
+}
+// Kääntää kuvien järjestyksen niiden tasojen kesken, joilla on kuva.
+export async function reverseLevels(pid, levels) {
+  for (let i = 0, j = levels.length - 1; i < j; i++, j--) await swapLevels(pid, levels[i], levels[j]);
+}
 export async function getLevel(pid, v) {
   return { orig: await imgDB.get(pid + ':' + v + ':o'), rec: await imgDB.get(pid + ':' + v) };
 }

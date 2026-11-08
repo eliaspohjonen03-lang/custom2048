@@ -20,7 +20,8 @@ Asennettu peli aukeaa koko näytölle omana sovelluksenaan ja toimii ilman verkk
 
 1. Avaa **Asetukset** (rataskuvake) ja valitse **+ Uusi kuvasetti**.
 2. Lisää jokaiselle tasolle (2–8192) kuva: **Laitteelta** (kuvagalleria tai kamera) tai **Linkki** (suora linkki kuvatiedostoon). **Lisää monta kuvaa kerralla** täyttää tyhjät tasot pienimmästä alkaen.
-3. Rajausikkunassa kuvaa voi siirtää vetämällä, zoomata kahdella sormella tai liukusäätimellä ja kiertää 90°. Rajausta voi muuttaa myöhemmin napauttamalla kuvaa.
+3. Kuvien järjestystä voi muuttaa jälkikäteen: **▲▼-nuolet** siirtävät kuvan pienemmälle tai isommalle tasolle (vaihtaa paikkaa viereisen tason kanssa), ja **⇅ Käännä järjestys** kääntää kaikki kuvat kerralla. Näin voi esim. laittaa pienimmän kalan tasolle 2 ja isommat kalat isommille tasoille.
+4. Rajausikkunassa kuvaa voi siirtää vetämällä, zoomata kahdella sormella tai liukusäätimellä ja kiertää 90°. Rajausta voi muuttaa myöhemmin napauttamalla kuvaa.
 
 Tasoilla, joilla ei ole kuvaa, näkyy tavallinen numero. Kuvasettejä voi olla useita, ja niiden välillä vaihdetaan Asetuksista.
 

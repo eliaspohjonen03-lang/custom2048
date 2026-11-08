@@ -188,6 +188,14 @@ try {
     await page.click('.modal:last-child >> text=Tallenna');
     await page.waitForSelector('.lvl[data-v="2"] >> text=Rajaa');
     await shot('asetukset.png');
+    // järjestyksen vaihto nuolilla: kuva tasolta 2 tasolle 4 ja takaisin
+    assert.ok(await page.locator('.lvl[data-v="2"] .mv-up').isDisabled());
+    await page.click('.lvl[data-v="2"] .mv-down');
+    await page.waitForSelector('.lvl[data-v="4"] >> text=Rajaa');
+    assert.equal(await page.locator('.lvl[data-v="2"] >> text=Rajaa').count(), 0);
+    await page.click('.lvl[data-v="4"] .mv-up');
+    await page.waitForSelector('.lvl[data-v="2"] >> text=Rajaa');
+    assert.equal(await page.locator('.lvl[data-v="4"] >> text=Rajaa').count(), 0);
     await page.click('.modal .sheet-head button[aria-label=Sulje]');
     const imgs = await page.locator('#evo .face.img').count();
     assert.equal(imgs, 1);

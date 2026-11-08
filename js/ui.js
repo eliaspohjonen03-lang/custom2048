@@ -4,7 +4,7 @@ import { SIZES, LEVELS, fmtTime } from './logic.js';
 import { st, resetStats } from './stats.js';
 import { miniTile } from './render.js';
 import {
-  P, activeProfile, saveProfiles, setShowValue, loadActiveImages, saveLevelImage, removeLevelImage, getLevel,
+  P, activeProfile, saveProfiles, setShowValue, loadActiveImages, saveLevelImage, removeLevelImage, getLevel, swapLevels, reverseLevels,
   createProfile, deleteProfile, exportJSON, exportFilename, importJSON
 } from './profiles.js';
 import { openCropper, fileToOrig, urlToOrig } from './cropper.js';
@@ -187,11 +187,31 @@ export function openSettings() {
           await loadActiveImages(); rebuild();
           toast(k ? `Lisättiin ${k} kuvaa tyhjille tasoille.` : 'Ei vapaita tasoja tai kuvia ei voitu lukea.');
         };
-        const info = h('p', 'muted', 'Kuvat täyttävät tyhjät tasot pienimmästä alkaen. Napauta kuvaa rajataksesi sen. Tasoille, joilla ei ole kuvaa, näytetään numero.');
-        im.append(many, info);
+        const filled = LEVELS.filter(v => P.imgURLs[v]);
+        const topRow = h('div', 'row'); topRow.appendChild(many);
+        if (filled.length > 1) {
+          const rev = h('button', 'btn small', '⇅ Käännä järjestys');
+          rev.onclick = async () => { await reverseLevels(p.id, filled); await loadActiveImages(); rebuild(); };
+          topRow.appendChild(rev);
+        }
+        const info = h('p', 'muted', 'Kuvat täyttävät tyhjät tasot pienimmästä alkaen. Muuta järjestystä ▲▼-nuolilla: pienin taso (2) tulee ensin, joten laita sinne esim. pienin kala ja isommille tasoille isommat. Napauta kuvaa rajataksesi sen. Tasoille, joilla ei ole kuvaa, näytetään numero.');
+        im.append(topRow, info);
         const list = h('div'); list.style.marginTop = '8px';
-        for (const v of LEVELS) {
+        const move = async (from, to) => {
+          await swapLevels(p.id, from, to); await loadActiveImages();
+          const y = s.scrollTop; rebuild(); s.scrollTop = y;
+          const btn = s.querySelector(`.lvl[data-v="${to}"] .mv-${to > from ? 'down' : 'up'}`);
+          if (btn && !btn.disabled) btn.focus({ preventScroll: true });
+        };
+        LEVELS.forEach((v, i) => {
           const row = h('div', 'lvl'); row.dataset.v = v;
+          const mv = h('div', 'mv');
+          const up = h('button', 'mv-up', '▲'); up.setAttribute('aria-label', `Siirrä kuva tasolta ${v} pienemmälle tasolle`);
+          const dn = h('button', 'mv-down', '▼'); dn.setAttribute('aria-label', `Siirrä kuva tasolta ${v} isommalle tasolle`);
+          const has = !!P.imgURLs[v];
+          up.disabled = !has || i === 0; dn.disabled = !has || i === LEVELS.length - 1;
+          up.onclick = () => move(v, LEVELS[i - 1]); dn.onclick = () => move(v, LEVELS[i + 1]);
+          mv.append(up, dn); row.appendChild(mv);
           const sq = miniTile(v, false); row.appendChild(sq);
           row.appendChild(h('div', 'num', v));
           const btns = h('div', 'btns');
@@ -222,7 +242,7 @@ export function openSettings() {
           };
           bUrl.onclick = () => openUrlDialog(v, afterOrig);
           list.appendChild(row);
-        }
+        });
         im.appendChild(list);
       }
       s.appendChild(im);

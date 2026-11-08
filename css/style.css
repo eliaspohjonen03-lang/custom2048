@@ -105,6 +105,9 @@ label.check input{width:20px;height:20px}
 .lvl{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
 .lvl:first-of-type{border-top:0}
 .lvl .sq{position:relative;width:48px;height:48px;flex:none;--tpx:48px;--tr:4px;cursor:pointer}
+.lvl .mv{display:flex;flex-direction:column;gap:2px;flex:none}
+.lvl .mv button{width:30px;height:23px;padding:0;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:11px;line-height:1;cursor:pointer}
+.lvl .mv button:disabled{opacity:.25;cursor:default}
 .lvl .num{width:52px;font-weight:700;font-variant-numeric:tabular-nums}
 .lvl .btns{display:flex;gap:6px;flex-wrap:wrap;flex:1;justify-content:flex-end}
 .stat{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line);gap:12px}
