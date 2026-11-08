@@ -1,0 +1,10 @@
+{
+  "name": "custom2048",
+  "private": true,
+  "type": "module",
+  "description": "2048-peli omilla kuvilla (PWA). Ei ajonaikaisia riippuvuuksia.",
+  "scripts": {
+    "test": "node --test",
+    "test:e2e": "node tests/smoke.e2e.mjs"
+  }
+}
