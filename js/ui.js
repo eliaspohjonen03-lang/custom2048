@@ -5,7 +5,7 @@ import { st, resetStats } from './stats.js';
 import { miniTile } from './render.js';
 import {
   P, activeProfile, saveProfiles, setShowValue, loadActiveImages, saveLevelImage, removeLevelImage, getLevel, swapLevels, reverseLevels,
-  createProfile, deleteProfile, exportJSON, exportFilename, importJSON
+  createProfile, deleteProfile, profilePreview, exportJSON, exportFilename, importJSON
 } from './profiles.js';
 import { openCropper, fileToOrig, urlToOrig } from './cropper.js';
 
@@ -139,11 +139,11 @@ export function openSettings() {
 
       // Profiilin valinta
       const sec = h('div', 'section'); sec.appendChild(h('h4', null, 'Kuvasetti'));
-      const r1 = h('div', 'row'); const sel = document.createElement('select');
-      sel.innerHTML = `<option value="">Tavalliset numerot</option>` + P.profiles.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
-      sel.value = P.activeId || '';
-      sel.onchange = async () => { P.activeId = sel.value || null; saveProfiles(); await loadActiveImages(); rebuild(); };
-      r1.appendChild(sel); sec.appendChild(r1);
+      const r1 = h('div', 'row');
+      r1.appendChild(h('div', 'cur-set', p ? p.name : 'Tavalliset numerot'));
+      const bPick = h('button', 'btn small primary', 'Vaihda kuvasettiä');
+      bPick.onclick = () => openSetPicker({ afterChange: rebuild, inSettings: true });
+      r1.appendChild(bPick); sec.appendChild(r1);
       const r2 = h('div', 'row');
       const bNew = h('button', 'btn small', '+ Uusi kuvasetti');
       bNew.onclick = async () => {
@@ -257,6 +257,47 @@ export function openSettings() {
     };
     build();
   });
+}
+
+/* ---------- Kuvasetin valinta ---------- */
+// opts: { afterChange(): void, inSettings: boolean }
+export function openSetPicker(opts = {}) {
+  openModal((s, close) => {
+    head(s, 'Vaihda kuvasettiä', close);
+    const list = h('div', 'set-list');
+    const choose = async id => {
+      P.activeId = id; saveProfiles(); close();
+      await loadActiveImages();
+      if (opts.afterChange) opts.afterChange();
+      const p = activeProfile(); toast(`Käytössä: ${p ? p.name : 'Tavalliset numerot'}`);
+    };
+    const item = (id, name) => {
+      const b = h('button', 'set-item' + ((P.activeId || null) === id ? ' on' : ''));
+      b.dataset.id = id || '';
+      const th = h('div', 'thumbs'); const txt = h('div', 'txt');
+      txt.appendChild(h('b', null, name)); const sub = h('small', null, id ? '…' : 'Numerot 2, 4, 8, …');
+      txt.appendChild(sub);
+      if (!id) [2, 4, 8].forEach(v => { const t = h('div', 'th num', v); th.appendChild(t); });
+      else profilePreview(id).then(({ count, thumbs }) => {
+        sub.textContent = count ? `${count} kuvaa` : 'Ei vielä kuvia';
+        thumbs.forEach(d => { const t = h('div', 'th'); t.style.backgroundImage = `url("${d}")`; th.appendChild(t); });
+      });
+      const mark = h('span', 'mark', (P.activeId || null) === id ? '✓' : '');
+      b.append(th, txt, mark);
+      b.onclick = () => { if ((P.activeId || null) === id) close(); else choose(id); };
+      list.appendChild(b);
+    };
+    item(null, 'Tavalliset numerot');
+    P.profiles.forEach(p => item(p.id, p.name));
+    s.appendChild(list);
+    const bNew = h('button', 'btn', '+ Uusi kuvasetti'); bNew.style.marginTop = '12px';
+    bNew.onclick = async () => {
+      const name = await promptBox('Uuden kuvasetin nimi', '', 'Luo'); if (!name) return;
+      close(); await createProfile(name);
+      if (opts.inSettings) opts.afterChange && opts.afterChange(); else openSettings();
+    };
+    s.appendChild(bNew);
+  }, true);
 }
 
 function openUrlDialog(v, afterOrig) {

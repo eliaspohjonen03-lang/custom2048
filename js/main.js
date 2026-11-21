@@ -9,7 +9,7 @@ import {
   updateHUD as paintHUD, showOver as paintOver, hideOver
 } from './render.js';
 import {
-  initUI, toastTile, confirmBox, openStats, openSettings, isModalOpen, closeTopModal, showUpdateBar
+  initUI, toastTile, confirmBox, openStats, openSettings, isModalOpen, closeTopModal, showUpdateBar, openSetPicker
 } from './ui.js';
 
 /* ================= Aikalaskuri ================= */
@@ -124,6 +124,7 @@ $('#btnUndo').onclick = undo;
 $('#btnNew').onclick = () => requestNewGame(G.n);
 $('#btnStats').onclick = openStats;
 $('#btnSettings').onclick = openSettings;
+$('#btnSets').onclick = () => openSetPicker();
 SIZES.forEach(n => {
   const b = h('button', null, `${n}×${n}`); b.dataset.n = n;
   b.onclick = () => { if (n !== G.n) requestNewGame(n); };

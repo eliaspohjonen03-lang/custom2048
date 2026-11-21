@@ -23,7 +23,9 @@ Asennettu peli aukeaa koko näytölle omana sovelluksenaan ja toimii ilman verkk
 3. Kuvien järjestystä voi muuttaa jälkikäteen: **▲▼-nuolet** siirtävät kuvan pienemmälle tai isommalle tasolle (vaihtaa paikkaa viereisen tason kanssa), ja **⇅ Käännä järjestys** kääntää kaikki kuvat kerralla. Näin voi esim. laittaa pienimmän kalan tasolle 2 ja isommat kalat isommille tasoille.
 4. Rajausikkunassa kuvaa voi siirtää vetämällä, zoomata kahdella sormella tai liukusäätimellä ja kiertää 90°. Rajausta voi muuttaa myöhemmin napauttamalla kuvaa.
 
-Tasoilla, joilla ei ole kuvaa, näkyy tavallinen numero. Kuvasettejä voi olla useita, ja niiden välillä vaihdetaan Asetuksista.
+Tasoilla, joilla ei ole kuvaa, näkyy tavallinen numero.
+
+Kuvasettejä voi olla tallessa useita yhtä aikaa. Käytössä olevan setin voi vaihtaa **Vaihda kuvasettiä** -napilla, joka on pääruudulla Eteneminen-kortissa ja Asetuksissa. Napista aukeaa lista, jossa näkyy jokaisen setin nimi, kuvien määrä ja pieni esikatselu. Listasta voi valita myös tavalliset numerot.
 
 **Kuvat tallentuvat vain sille laitteelle ja selaimelle, jolla ne lisättiin.** Toiselle laitteelle tai kaverille ne siirretään näin: **Vie kuvasetti** (tiedostona tai leikepöydälle tekstinä) ja toisella laitteella **Tuo kuvasetti**.
 

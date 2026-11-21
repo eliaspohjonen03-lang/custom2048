@@ -204,6 +204,25 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('#evo .face.img').length === 1);
   });
 
+  await step('kuvasetin vaihto pääruudun napista', async () => {
+    await page.click('#btnSets'); await page.waitForSelector('.set-item');
+    assert.equal(await page.locator('.set-item').count(), 2);
+    await page.waitForSelector('.set-item[data-id]:not([data-id=""]) >> text=1 kuvaa');
+    await shot('vaihda-setti.png');
+    await page.click('.set-item[data-id=""]');
+    await page.waitForFunction(() => document.querySelector('#evoName').textContent === 'Tavalliset numerot');
+    assert.equal(await page.locator('#evo .face.img').count(), 0);
+    await page.click('#btnSets'); await page.click('.set-item >> text=Testisetti');
+    await page.waitForFunction(() => document.querySelectorAll('#evo .face.img').length === 1);
+    assert.equal(await page.textContent('#evoName'), 'Testisetti');
+    // sama nappi myös Asetuksissa
+    await page.click('#btnSettings'); await page.click('.modal >> text=Vaihda kuvasettiä');
+    await page.click('.modal:last-child .set-item[data-id=""]');
+    await page.waitForSelector('.modal .cur-set >> text=Tavalliset numerot');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.modal').count(), 0);
+  });
+
   await step('ei konsolivirheitä eikä ulkoisia pyyntöjä', async () => {
     assert.deepEqual(errors, []);
   });

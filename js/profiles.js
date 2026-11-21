@@ -75,6 +75,13 @@ export async function getLevel(pid, v) {
   return { orig: await imgDB.get(pid + ':' + v + ':o'), rec: await imgDB.get(pid + ':' + v) };
 }
 
+// Esikatselu valintaikkunaa varten: kuvien määrä ja muutama ensimmäinen kuva (dataURL).
+export async function profilePreview(pid, max = 5) {
+  const recs = await Promise.all(LEVELS.map(v => imgDB.get(pid + ':' + v).catch(() => null)));
+  const imgs = recs.filter(r => r && r.data).map(r => r.data);
+  return { count: imgs.length, thumbs: imgs.slice(0, max) };
+}
+
 export async function createProfile(name) {
   const id = newProfileId();
   P.profiles.push({ id, name }); P.activeId = id; saveProfiles(); await loadActiveImages();
