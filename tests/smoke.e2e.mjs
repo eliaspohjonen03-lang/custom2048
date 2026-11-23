@@ -35,7 +35,8 @@ const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', e => errors.push(String(e)));
 const OV = 'https://api.openverse.org/';
-page.on('request', r => { if (!r.url().startsWith(BASE) && !r.url().startsWith(OV) && !r.url().startsWith('blob:') && !r.url().startsWith('data:')) errors.push('ulkoinen pyyntö: ' + r.url()); });
+const MOCKED = [OV, 'https://fi.wikipedia.org/', 'https://en.wikipedia.org/', 'https://commons.wikimedia.org/', 'https://upload.wikimedia.org/'];
+page.on('request', r => { const u = r.url(); if (!u.startsWith(BASE) && !MOCKED.some(m => u.startsWith(m)) && !u.startsWith('blob:') && !u.startsWith('data:')) errors.push('ulkoinen pyyntö: ' + u); });
 
 // Yksivärinen 8×6-PNG (väri vaihtelee numeron mukaan) jäljiteltyjä pikkukuvia varten.
 function solidPNG(i) {
@@ -71,6 +72,44 @@ await page.route(OV + '**', async route => {
       body: JSON.stringify({ result_count: 30, page_count: 2, page_size: size, page, results }) });
   }
   return route.fulfill({ status: 404, headers: cors, body: '' });
+});
+
+// Jäljitellyt Wikipedia- ja Commons-rajapinnat. Haku "virhe" palauttaa 429.
+// Wikipedia: "Teemu Pukki" -artikkelin pääkuva (sama tiedosto fi- ja en-wikissä, en-wikissä lisäksi toinen).
+// Commons: 25 tulosta (20 + 5).
+const wikiCalls = [];
+await page.route('https://upload.wikimedia.org/**', route => {
+  const i = (route.request().url().match(/(\d+)\.png/) || [, 0])[1];
+  return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'image/png' }, body: solidPNG(+i + 3) });
+});
+await page.route(/^https:\/\/(fi|en)\.wikipedia\.org\/w\/api\.php|^https:\/\/commons\.wikimedia\.org\/w\/api\.php/, route => {
+  const u = new URL(route.request().url()); const P = u.searchParams; wikiCalls.push(u.host + ' ' + u.search);
+  const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+  const json = d => route.fulfill({ status: 200, headers: cors, body: JSON.stringify(d) });
+  const ii = (file, n) => [{ thumburl: `https://upload.wikimedia.org/thumb/${n}.png`, url: `https://upload.wikimedia.org/${n}.png`,
+    descriptionurl: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file)}`,
+    extmetadata: { Artist: { value: `<a href="https://x.example/u${n}">Kuvaaja W${n}</a>` }, LicenseShortName: { value: 'CC BY-SA 4.0' } } }];
+  if (P.get('origin') !== '*' || P.get('format') !== 'json') return route.fulfill({ status: 400, headers: cors, body: '{}' });
+  if ((P.get('gsrsearch') || '').startsWith('virhe')) return route.fulfill({ status: 429, headers: cors, body: '{}' });
+  const ns = u.host.startsWith('fi.') ? 'Tiedosto:' : 'File:';
+  if (u.host === 'commons.wikimedia.org') {
+    const off = +(P.get('gsroffset') || 0); const pages = [];
+    for (let i = off; i < Math.min(25, off + 20); i++) pages.push({ pageid: 100 + i, ns: 6, title: `File:Kuva ${i}.jpg`, index: i - off + 1, imageinfo: ii(`Kuva ${i}.jpg`, 100 + i) });
+    return json(off + 20 < 25 ? { continue: { gsroffset: off + 20, continue: 'gsroffset||' }, query: { pages } } : { query: { pages } });
+  }
+  if (P.get('generator') === 'search') {
+    const pages = P.get('gsrsearch') === 'Teemu Pukki' ? [
+      { pageid: 1, ns: 0, title: 'Teemu Pukki', index: 1, pageimage: 'Teemu_Pukki_2019.jpg' },
+      { pageid: 2, ns: 0, title: 'Norwich City FC', index: 2 },
+      ...(u.host.startsWith('en.') ? [{ pageid: 3, ns: 0, title: 'Pukki goal', index: 3, pageimage: 'Pukki_goal.jpg' }] : [])
+    ] : [];
+    return json(pages.length ? { query: { pages } } : { batchcomplete: true });
+  }
+  if (P.get('titles')) {
+    const pages = P.get('titles').split('|').map((t, k) => { const f = t.replace(/^File:/, '').replace(/_/g, ' '); return { ns: 6, title: ns + f, imageinfo: ii(f, f.startsWith('Teemu') ? 1 : 2) }; });
+    return json({ query: { pages } });
+  }
+  return json({});
 });
 
 const game = () => page.evaluate(() => JSON.parse(localStorage.getItem('g2048.game')));
@@ -267,44 +306,56 @@ try {
     await page.fill('.modal:last-child input[type=text]', 'Hakusetti');
     await page.click('.modal:last-child >> text=Luo');
     await page.waitForSelector('.lvl');
-    // virhetilanne näytetään käyttäjälle
+    // oletuslähde on Wikipedia; virhetilanne näytetään käyttäjälle
     await page.click('text=🔍 Hae kuvia netistä');
+    assert.equal(await page.textContent('.search-src button.on'), 'Wikipedia');
     await page.fill('.modal:last-child input[type=search]', 'virhe');
     await page.press('.modal:last-child input[type=search]', 'Enter');
     await page.waitForSelector('.modal:last-child .err:not([hidden]) >> text=Liikaa hakuja');
-    // onnistunut haku, sivutus ja valinta
-    await page.fill('.modal:last-child input[type=search]', 'kissa');
+    // ihmishaku: artikkelin pääkuva ensin (fi ja en, kaksoiskappale pois), sitten Commons; sivutus
+    await page.fill('.modal:last-child input[type=search]', 'Teemu Pukki');
     await page.click('.modal:last-child button[type=submit]');
-    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 20);
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 22);
+    const ids = await page.$$eval('.search-grid .hit', b => b.slice(0, 3).map(x => x.dataset.id));
+    assert.deepEqual(ids, ['wm:teemu_pukki_2019.jpg', 'wm:pukki_goal.jpg', 'wm:kuva_0.jpg']);
     await page.click('.modal:last-child >> text=Lisää tuloksia');
-    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 30);
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 27);
     assert.ok(await page.locator('.modal:last-child >> text=Lisää tuloksia').isHidden());
     assert.ok(await page.isDisabled('.modal:last-child >> text=Lisää valitut'));
-    await page.click('.search-grid .hit[data-id="k3"]');
-    await page.click('.search-grid .hit[data-id="k0"]');
-    await page.click('.search-grid .hit[data-id="k25"]');
-    await page.click('.search-grid .hit[data-id="k25"]'); // poisto valinnasta
-    assert.equal(await page.getAttribute('.search-grid .hit[data-id="k3"]', 'data-n'), '1');
-    assert.equal(await page.getAttribute('.search-grid .hit[data-id="k0"]', 'data-n'), '2');
+    await page.click('.search-grid .hit[data-id="wm:teemu_pukki_2019.jpg"]');
+    await page.click('.search-grid .hit[data-id="wm:kuva_3.jpg"]');
+    await page.click('.search-grid .hit[data-id="wm:kuva_24.jpg"]');
+    await page.click('.search-grid .hit[data-id="wm:kuva_24.jpg"]'); // poisto valinnasta
+    assert.equal(await page.getAttribute('.search-grid .hit[data-id="wm:teemu_pukki_2019.jpg"]', 'data-n'), '1');
+    assert.equal(await page.getAttribute('.search-grid .hit[data-id="wm:kuva_3.jpg"]', 'data-n'), '2');
+    await page.$eval('.modal:last-child .sheet', el => { el.scrollTop = 0; });
     await shot('kuvahaku.png');
     await page.click('.modal:last-child >> text=Lisää valitut (2)');
     await page.waitForSelector('.lvl[data-v="4"] >> text=Rajaa');
     assert.ok(await page.locator('.lvl[data-v="2"] >> text=Rajaa').isVisible());
     assert.equal(await page.locator('.lvl[data-v="8"] >> text=Rajaa').count(), 0);
     await page.waitForSelector('.sources >> text=Kuvien lähteet (2)');
-    // yksittäinen taso: napautus valitsee ja avaa rajauksen
+    // yksittäinen taso: lähteen vaihto Openverseen hakee saman hakusanan uudelleen
     await page.click('.lvl[data-v="16"] >> text=Haku');
     await page.fill('.modal:last-child input[type=search]', 'kissa');
     await page.press('.modal:last-child input[type=search]', 'Enter');
-    await page.click('.search-grid .hit[data-id="k7"]');
+    await page.waitForSelector('.search-grid .hit[data-id="wm:kuva_0.jpg"]');
+    await page.click('.search-src button[data-src="openverse"]');
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 20 && !document.querySelector('.search-grid .hit[data-id^="wm:"]'));
+    await page.click('.modal:last-child >> text=Lisää tuloksia');
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 30);
+    await page.click('.search-grid .hit[data-id="ov:k7"]');
     await page.waitForSelector('.crop-view canvas');
     await page.click('.modal:last-child >> text=Tallenna');
     await page.waitForSelector('.lvl[data-v="16"] >> text=Rajaa');
     await page.click('.sources summary');
     const src = await page.textContent('.sources');
     assert.match(src, /Kuvien lähteet \(3\)/);
-    assert.match(src, /2: ”Kissa 3” – Kuvaaja 3, CC BY 2\.0 \(Openverse\)/);
-    assert.match(src, /16: ”Kissa 7”/);
+    assert.match(src, /2: ”Teemu Pukki” – Kuvaaja W1, CC BY-SA 4\.0 \(Wikipedia\)/);
+    assert.match(src, /4: ”Kuva 3” – Kuvaaja W103, CC BY-SA 4\.0 \(Wikimedia Commons\)/);
+    assert.match(src, /16: ”Kissa 7” – Kuvaaja 7, CC BY 2\.0 \(Openverse\)/);
+    // valittu lähde muistetaan
+    assert.equal(await page.evaluate(() => localStorage.getItem('g2048.searchSource')), '"openverse"');
     // uudelleenrajaus säilyttää lähdetiedon, laitteelta vaihdettu kuva poistaa sen
     await page.click('.lvl[data-v="16"] >> text=Rajaa'); await page.click('.modal:last-child >> text=Tallenna');
     await page.waitForSelector('.sources >> text=Kuvien lähteet (3)');
@@ -315,6 +366,7 @@ try {
     await page.waitForSelector('.sources >> text=Kuvien lähteet (2)');
     await shot('lahteet.png');
     assert.ok(ovCalls.some(c => c.includes('q=kissa') && c.includes('page=2')));
+    assert.ok(wikiCalls.some(c => c.startsWith('commons.wikimedia.org') && c.includes('gsroffset=20')));
     await page.keyboard.press('Escape');
     // kuvat säilyvät uudelleenlatauksen yli
     await page.reload(); await page.waitForSelector('#tiles .tile');

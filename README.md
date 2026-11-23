@@ -29,7 +29,7 @@ Kuvasettejä voi olla tallessa useita yhtä aikaa. Käytössä olevan setin voi 
 
 **Kuvat tallentuvat vain sille laitteelle ja selaimelle, jolla ne lisättiin.** Toiselle laitteelle tai kaverille ne siirretään näin: **Vie kuvasetti** (tiedostona tai leikepöydälle tekstinä) ja toisella laitteella **Tuo kuvasetti**.
 
-Kuvahaku käyttää [Openverseä](https://openverse.org), jossa on vapaasti lisensoituja kuvia (Creative Commons ja public domain). Hakuun ei tarvita tunnusta tai avainta, mutta se vaatii verkkoyhteyden. Valitut kuvat tallentuvat laitteelle samalla tavalla kuin laitteelta valitut, joten ne toimivat myös ilman verkkoa. Kuvan nimi, tekijä ja lisenssi tallentuvat mukaan, ja ne näkyvät Asetuksissa kohdassa **Kuvien lähteet**. Monet lisenssit edellyttävät tekijän mainitsemista, jos kuvia jaetaan eteenpäin.
+Kuvahaussa on kaksi lähdettä. **Wikipedia** (oletus) hakee ensin Wikipedia-artikkelien pääkuvat suomen- ja englanninkielisestä Wikipediasta ja sen jälkeen lisää kuvia Wikimedia Commonsista. Se sopii hyvin ihmisille, kuten urheilijoille ja muusikoille, sekä eläimille, paikoille ja asioille. **[Openverse](https://openverse.org)** on vapaasti lisensoitu kuvapankki. Molempien kuvat ovat vapaasti käytettäviä (Creative Commons tai public domain), eikä hakuun tarvita tunnusta tai avainta. Haku vaatii verkkoyhteyden, ja hidas haku keskeytetään 12 sekunnin jälkeen. Valitut kuvat tallentuvat laitteelle samalla tavalla kuin laitteelta valitut, joten ne toimivat myös ilman verkkoa. Kuvan nimi, tekijä ja lisenssi tallentuvat mukaan, ja ne näkyvät Asetuksissa kohdassa **Kuvien lähteet**. Monet lisenssit edellyttävät tekijän mainitsemista, jos kuvia jaetaan eteenpäin.
 
 Linkkikuvissa jotkin sivustot eivät salli kuvan käyttöä toisella sivulla. Tallenna silloin kuva ensin laitteelle ja valitse se Laitteelta-napilla.
 
@@ -46,7 +46,7 @@ js/render.js           laudan ja laattojen piirto, animaatiot
 js/storage.js          localStorage- ja IndexedDB-apurit
 js/stats.js            tilastot
 js/profiles.js         kuvasetit, vienti ja tuonti
-js/search.js           kuvahaku (Openverse)
+js/search.js           kuvahaku (Wikipedia/Commons ja Openverse)
 js/cropper.js          kuvan käsittely ja rajausikkuna
 js/ui.js               modaalit, toast, asetukset- ja tilastot-ikkunat
 js/dom.js              pienet DOM-apurit

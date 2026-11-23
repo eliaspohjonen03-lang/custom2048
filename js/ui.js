@@ -8,7 +8,8 @@ import {
   createProfile, deleteProfile, profilePreview, exportJSON, exportFilename, importJSON, levelSources
 } from './profiles.js';
 import { openCropper, fileToOrig, urlToOrig } from './cropper.js';
-import { searchImages, itemToOrig, itemMeta } from './search.js';
+import { SOURCES, searchImages, itemToOrig, itemMeta } from './search.js';
+import { store } from './storage.js';
 
 // main.js antaa tämän: { getN(): number, onStatsReset(): void, onFacesChange(): void }
 let ctx = { getN: () => 4, onStatsReset() {}, onFacesChange() {} };
@@ -353,9 +354,22 @@ export function openImageSearch(opts = {}) {
       inp.setAttribute('aria-label', 'Hakusana'); inp.enterKeyHint = 'search';
       const go = h('button', 'btn primary', 'Hae'); go.type = 'submit';
       form.append(inp, go); s.appendChild(form);
+      let source = SOURCES.some(x => x.id === store.get('searchSource')) ? store.get('searchSource') : SOURCES[0].id;
+      const seg = h('div', 'seg search-src'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Hakulähde');
+      SOURCES.forEach(x => {
+        const b = h('button', null, x.label); b.type = 'button'; b.dataset.src = x.id; b.title = x.hint;
+        b.onclick = () => { if (source === x.id) return; source = x.id; store.set('searchSource', source); drawSeg(); if (q) { page = 0; load(); } };
+        seg.appendChild(b);
+      });
+      const srcHint = h('span', 'muted');
+      const drawSeg = () => {
+        [...seg.children].forEach(b => b.classList.toggle('on', b.dataset.src === source));
+        srcHint.textContent = SOURCES.find(x => x.id === source).hint;
+      };
+      const srcRow = h('div', 'row'); srcRow.style.marginTop = '10px'; srcRow.append(seg, srcHint); s.appendChild(srcRow);
       s.appendChild(h('p', 'muted', single
-        ? 'Napauta kuvaa valitaksesi sen. Kuvat ovat vapaasti käytettäviä (Openverse). Valittu kuva tallentuu tälle laitteelle.'
-        : `Valitse enintään ${max} kuvaa. Ne lisätään tyhjille tasoille valintajärjestyksessä, pienimmästä tasosta alkaen. Kuvat ovat vapaasti käytettäviä (Openverse) ja tallentuvat tälle laitteelle.`));
+        ? 'Napauta kuvaa valitaksesi sen. Kuvat ovat vapaasti käytettäviä, ja valittu kuva tallentuu tälle laitteelle.'
+        : `Valitse enintään ${max} kuvaa. Ne lisätään tyhjille tasoille valintajärjestyksessä, pienimmästä tasosta alkaen. Kuvat ovat vapaasti käytettäviä ja tallentuvat tälle laitteelle.`));
       const err = h('p', 'err'); err.hidden = true; s.appendChild(err);
       const grid = h('div', 'search-grid'); s.appendChild(grid);
       const more = h('button', 'btn small', 'Lisää tuloksia'); more.hidden = true; more.style.cssText = 'display:block;margin:10px auto 0';
@@ -365,7 +379,7 @@ export function openImageSearch(opts = {}) {
       const ok = h('button', 'btn primary', 'Lisää valitut'); ok.disabled = true;
       foot.append(cnt, ok); s.appendChild(foot);
 
-      let q = '', page = 0, busy = false; const sel = [];
+      let q = '', page = 0, cursor = null, busy = false, gen = 0; const sel = [];
       const upd = () => {
         cnt.textContent = `Valittu ${sel.length}/${max}`;
         ok.disabled = !sel.length; ok.textContent = sel.length ? `Lisää valitut (${sel.length})` : 'Lisää valitut';
@@ -391,28 +405,32 @@ export function openImageSearch(opts = {}) {
         };
         grid.appendChild(b);
       });
+      // page = ladattujen sivujen määrä (0 = uusi haku). gen estää vanhan haun tulosten sekoittumisen uuteen.
       const load = async () => {
-        if (busy || !q) return; busy = true; err.hidden = true;
-        go.disabled = more.disabled = true; more.textContent = 'Haetaan…';
-        if (!page) grid.innerHTML = '<p class="muted search-msg">Haetaan…</p>';
+        if (!q || (busy && page)) return;
+        const my = ++gen; busy = true; err.hidden = true;
+        more.disabled = true; more.textContent = 'Haetaan…';
+        if (!page) { grid.innerHTML = '<p class="muted search-msg">Haetaan…</p>'; more.hidden = true; cursor = null; }
         try {
-          const r = await searchImages(q, page + 1);
+          const r = await searchImages(source, q, page ? cursor : null);
+          if (my !== gen) return;
           if (!page) grid.innerHTML = '';
-          page++; add(r.items); upd();
-          if (!grid.children.length) grid.innerHTML = '<p class="muted search-msg">Ei tuloksia. Kokeile toista hakusanaa, esim. englanniksi.</p>';
-          more.hidden = !r.hasMore;
+          page++; cursor = r.next; add(r.items); upd();
+          if (!grid.querySelector('.hit')) grid.innerHTML = '<p class="muted search-msg">Ei tuloksia. Kokeile toista hakusanaa' + (source === 'openverse' ? ', englanniksi tai Wikipedia-lähdettä.' : ' tai Openverse-lähdettä.') + '</p>';
+          more.hidden = r.next == null;
         } catch (e) {
+          if (my !== gen) return;
           if (!page) grid.innerHTML = '';
           err.textContent = e.message; err.hidden = false;
-        } finally { busy = false; go.disabled = more.disabled = false; more.textContent = 'Lisää tuloksia'; }
+        } finally { if (my === gen) { busy = false; more.disabled = false; more.textContent = 'Lisää tuloksia'; } }
       };
       form.onsubmit = e => {
         e.preventDefault(); const v = inp.value.trim(); if (!v) { inp.focus(); return; }
-        inp.blur(); q = v; page = 0; more.hidden = true; load();
+        inp.blur(); q = v; page = 0; load();
       };
       more.onclick = load;
       ok.onclick = () => { result = sel.slice(); close(); };
-      upd(); setTimeout(() => inp.focus(), 30);
+      drawSeg(); upd(); setTimeout(() => inp.focus(), 30);
     });
     m._onclose = () => res(result);
   });
