@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { deflateSync } from 'node:zlib';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -33,7 +34,44 @@ const page = await context.newPage();
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', e => errors.push(String(e)));
-page.on('request', r => { if (!r.url().startsWith(BASE) && !r.url().startsWith('blob:') && !r.url().startsWith('data:')) errors.push('ulkoinen pyyntö: ' + r.url()); });
+const OV = 'https://api.openverse.org/';
+page.on('request', r => { if (!r.url().startsWith(BASE) && !r.url().startsWith(OV) && !r.url().startsWith('blob:') && !r.url().startsWith('data:')) errors.push('ulkoinen pyyntö: ' + r.url()); });
+
+// Yksivärinen 8×6-PNG (väri vaihtelee numeron mukaan) jäljiteltyjä pikkukuvia varten.
+function solidPNG(i) {
+  const W = 8, H = 6, rgb = [(i * 67) % 256, (i * 131 + 80) % 256, (i * 29 + 160) % 256];
+  const raw = Buffer.alloc(H * (1 + W * 3));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) raw.set(rgb, y * (1 + W * 3) + 1 + x * 3);
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = b => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+// Jäljitelty Openverse-rajapinta: haku "virhe" palauttaa 429, muut 30 tulosta (2 sivua).
+const ovCalls = [];
+await page.route(OV + '**', async route => {
+  const u = new URL(route.request().url()); ovCalls.push(u.pathname + u.search);
+  const cors = { 'access-control-allow-origin': '*' };
+  const m = u.pathname.match(/^\/v1\/images\/([^/]+)\/thumb\/$/);
+  if (m) {
+    const i = +m[1].slice(1);
+    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'image/png' }, body: solidPNG(i) });
+  }
+  if (u.pathname === '/v1/images/') {
+    if (u.searchParams.get('q') === 'virhe') return route.fulfill({ status: 429, headers: cors, body: '{}' });
+    const page = +u.searchParams.get('page'), size = +u.searchParams.get('page_size');
+    const results = [];
+    for (let i = (page - 1) * size; i < Math.min(30, page * size); i++) results.push({
+      id: 'k' + i, title: 'Kissa ' + i, creator: 'Kuvaaja ' + i, license: 'by', license_version: '2.0',
+      thumbnail: `${OV}v1/images/k${i}/thumb/`, url: `https://kuvat.example/k${i}.jpg`, foreign_landing_url: `https://flickr.example/k${i}`
+    });
+    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({ result_count: 30, page_count: 2, page_size: size, page, results }) });
+  }
+  return route.fulfill({ status: 404, headers: cors, body: '' });
+});
 
 const game = () => page.evaluate(() => JSON.parse(localStorage.getItem('g2048.game')));
 const num = async sel => +(await page.textContent(sel));
@@ -223,8 +261,69 @@ try {
     assert.equal(await page.locator('.modal').count(), 0);
   });
 
+  await step('kuvahaku netistä: monta kerralla ja yksittäinen taso', async () => {
+    await page.click('#btnSettings'); await page.waitForSelector('.modal');
+    await page.click('text=+ Uusi kuvasetti');
+    await page.fill('.modal:last-child input[type=text]', 'Hakusetti');
+    await page.click('.modal:last-child >> text=Luo');
+    await page.waitForSelector('.lvl');
+    // virhetilanne näytetään käyttäjälle
+    await page.click('text=🔍 Hae kuvia netistä');
+    await page.fill('.modal:last-child input[type=search]', 'virhe');
+    await page.press('.modal:last-child input[type=search]', 'Enter');
+    await page.waitForSelector('.modal:last-child .err:not([hidden]) >> text=Liikaa hakuja');
+    // onnistunut haku, sivutus ja valinta
+    await page.fill('.modal:last-child input[type=search]', 'kissa');
+    await page.click('.modal:last-child button[type=submit]');
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 20);
+    await page.click('.modal:last-child >> text=Lisää tuloksia');
+    await page.waitForFunction(() => document.querySelectorAll('.search-grid .hit').length === 30);
+    assert.ok(await page.locator('.modal:last-child >> text=Lisää tuloksia').isHidden());
+    assert.ok(await page.isDisabled('.modal:last-child >> text=Lisää valitut'));
+    await page.click('.search-grid .hit[data-id="k3"]');
+    await page.click('.search-grid .hit[data-id="k0"]');
+    await page.click('.search-grid .hit[data-id="k25"]');
+    await page.click('.search-grid .hit[data-id="k25"]'); // poisto valinnasta
+    assert.equal(await page.getAttribute('.search-grid .hit[data-id="k3"]', 'data-n'), '1');
+    assert.equal(await page.getAttribute('.search-grid .hit[data-id="k0"]', 'data-n'), '2');
+    await shot('kuvahaku.png');
+    await page.click('.modal:last-child >> text=Lisää valitut (2)');
+    await page.waitForSelector('.lvl[data-v="4"] >> text=Rajaa');
+    assert.ok(await page.locator('.lvl[data-v="2"] >> text=Rajaa').isVisible());
+    assert.equal(await page.locator('.lvl[data-v="8"] >> text=Rajaa').count(), 0);
+    await page.waitForSelector('.sources >> text=Kuvien lähteet (2)');
+    // yksittäinen taso: napautus valitsee ja avaa rajauksen
+    await page.click('.lvl[data-v="16"] >> text=Haku');
+    await page.fill('.modal:last-child input[type=search]', 'kissa');
+    await page.press('.modal:last-child input[type=search]', 'Enter');
+    await page.click('.search-grid .hit[data-id="k7"]');
+    await page.waitForSelector('.crop-view canvas');
+    await page.click('.modal:last-child >> text=Tallenna');
+    await page.waitForSelector('.lvl[data-v="16"] >> text=Rajaa');
+    await page.click('.sources summary');
+    const src = await page.textContent('.sources');
+    assert.match(src, /Kuvien lähteet \(3\)/);
+    assert.match(src, /2: ”Kissa 3” – Kuvaaja 3, CC BY 2\.0 \(Openverse\)/);
+    assert.match(src, /16: ”Kissa 7”/);
+    // uudelleenrajaus säilyttää lähdetiedon, laitteelta vaihdettu kuva poistaa sen
+    await page.click('.lvl[data-v="16"] >> text=Rajaa'); await page.click('.modal:last-child >> text=Tallenna');
+    await page.waitForSelector('.sources >> text=Kuvien lähteet (3)');
+    const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 50; return c.toDataURL('image/png').split(',')[1]; });
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.lvl[data-v="16"] >> text=Laitteelta')]);
+    await chooser.setFiles({ name: 'oma.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await page.click('.modal:last-child >> text=Tallenna');
+    await page.waitForSelector('.sources >> text=Kuvien lähteet (2)');
+    await shot('lahteet.png');
+    assert.ok(ovCalls.some(c => c.includes('q=kissa') && c.includes('page=2')));
+    await page.keyboard.press('Escape');
+    // kuvat säilyvät uudelleenlatauksen yli
+    await page.reload(); await page.waitForSelector('#tiles .tile');
+    await page.waitForFunction(() => document.querySelectorAll('#evo .face.img').length === 3);
+  });
+
   await step('ei konsolivirheitä eikä ulkoisia pyyntöjä', async () => {
-    assert.deepEqual(errors, []);
+    // jäljitellyn 429-vastauksen selain kirjaa itse konsoliin – se on odotettu
+    assert.deepEqual(errors.filter(e => !/status of 429/.test(e)), []);
   });
 
   await step('service worker ja offline-tila', async () => {

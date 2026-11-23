@@ -5,9 +5,10 @@ import { st, resetStats } from './stats.js';
 import { miniTile } from './render.js';
 import {
   P, activeProfile, saveProfiles, setShowValue, loadActiveImages, saveLevelImage, removeLevelImage, getLevel, swapLevels, reverseLevels,
-  createProfile, deleteProfile, profilePreview, exportJSON, exportFilename, importJSON
+  createProfile, deleteProfile, profilePreview, exportJSON, exportFilename, importJSON, levelSources
 } from './profiles.js';
 import { openCropper, fileToOrig, urlToOrig } from './cropper.js';
+import { searchImages, itemToOrig, itemMeta } from './search.js';
 
 // main.js antaa tämän: { getN(): number, onStatsReset(): void, onFacesChange(): void }
 let ctx = { getN: () => 4, onStatsReset() {}, onFacesChange() {} };
@@ -182,13 +183,27 @@ export function openSettings() {
           let k = 0;
           for (const f of files) {
             if (k >= empty.length) break;
-            try { const o = await fileToOrig(f); await saveLevelImage(p.id, empty[k], o); k++; } catch (e) {}
+            try { const o = await fileToOrig(f); await saveLevelImage(p.id, empty[k], o, null, null); k++; } catch (e) {}
           }
           await loadActiveImages(); rebuild();
           toast(k ? `Lisättiin ${k} kuvaa tyhjille tasoille.` : 'Ei vapaita tasoja tai kuvia ei voitu lukea.');
         };
+        const web = h('button', 'btn small', '🔍 Hae kuvia netistä');
+        web.onclick = async () => {
+          const empty = LEVELS.filter(v => !P.imgURLs[v]);
+          if (!empty.length) { toast('Kaikilla tasoilla on jo kuva.'); return; }
+          const picked = await openImageSearch({ max: empty.length });
+          if (!picked.length) return;
+          let k = 0;
+          for (const it of picked) {
+            try { const o = await itemToOrig(it); await saveLevelImage(p.id, empty[k], o, null, itemMeta(it)); k++; } catch (e) {}
+          }
+          await loadActiveImages(); rebuild();
+          const fail = picked.length - k;
+          toast(k ? `Lisättiin ${k} kuvaa tyhjille tasoille.${fail ? ` ${fail} kuvaa ei saatu tallennettua.` : ''}` : 'Kuvia ei saatu tallennettua. Kokeile toisia kuvia.');
+        };
         const filled = LEVELS.filter(v => P.imgURLs[v]);
-        const topRow = h('div', 'row'); topRow.appendChild(many);
+        const topRow = h('div', 'row'); topRow.append(many, web);
         if (filled.length > 1) {
           const rev = h('button', 'btn small', '⇅ Käännä järjestys');
           rev.onclick = async () => { await reverseLevels(p.id, filled); await loadActiveImages(); rebuild(); };
@@ -216,8 +231,9 @@ export function openSettings() {
           row.appendChild(h('div', 'num', v));
           const btns = h('div', 'btns');
           const bDev = h('button', 'btn small', 'Laitteelta');
+          const bWeb = h('button', 'btn small', 'Haku');
           const bUrl = h('button', 'btn small', 'Linkki');
-          btns.append(bDev, bUrl); row.appendChild(btns);
+          btns.append(bDev, bWeb, bUrl); row.appendChild(btns);
           const doCrop = async () => {
             const { orig, rec } = await getLevel(p.id, v);
             const src = orig || (rec && rec.data); if (!src) return;
@@ -232,9 +248,14 @@ export function openSettings() {
           } else {
             sq.onclick = () => bDev.click();
           }
-          const afterOrig = async orig => {
+          const afterOrig = async (orig, meta = null) => {
             const cr = await openCropper(orig, null, v); if (!cr) return;
-            await saveLevelImage(p.id, v, orig, cr); await loadActiveImages(); rebuild();
+            await saveLevelImage(p.id, v, orig, cr, meta); await loadActiveImages(); rebuild();
+          };
+          bWeb.onclick = async () => {
+            const [it] = await openImageSearch({ max: 1, level: v }); if (!it) return;
+            let orig; try { orig = await itemToOrig(it); } catch (e) { toast(e.message); return; }
+            await afterOrig(orig, itemMeta(it));
           };
           bDev.onclick = async () => {
             const [f] = await pickFile($('#fileOne')); if (!f) return;
@@ -244,6 +265,24 @@ export function openSettings() {
           list.appendChild(row);
         });
         im.appendChild(list);
+        const srcBox = h('details', 'sources'); srcBox.hidden = true;
+        im.appendChild(srcBox);
+        levelSources(p.id).then(list => {
+          if (!list.length) return;
+          srcBox.hidden = false;
+          srcBox.appendChild(h('summary', null, `Kuvien lähteet (${list.length})`));
+          const ul = h('ul');
+          list.forEach(({ v, meta }) => {
+            const li = h('li'); li.appendChild(h('b', null, v + ': '));
+            const t = meta.title ? `”${meta.title}”` : 'Kuva';
+            if (meta.landing) { const a = h('a', null, t); a.href = meta.landing; a.target = '_blank'; a.rel = 'noopener noreferrer'; li.appendChild(a); }
+            else li.appendChild(document.createTextNode(t));
+            const rest = [meta.creator, meta.license].filter(Boolean).join(', ');
+            li.appendChild(document.createTextNode((rest ? ' – ' + rest : '') + (meta.via ? ` (${meta.via})` : '')));
+            ul.appendChild(li);
+          });
+          srcBox.appendChild(ul);
+        });
       }
       s.appendChild(im);
 
@@ -298,6 +337,85 @@ export function openSetPicker(opts = {}) {
     };
     s.appendChild(bNew);
   }, true);
+}
+
+/* ---------- Kuvahaku netistä ---------- */
+// opts: { max: number, level?: number }. Palauttaa valitut tulokset valintajärjestyksessä (tai []).
+// max = 1: napautus valitsee heti. Muuten valitaan monta ja painetaan "Lisää valitut".
+export function openImageSearch(opts = {}) {
+  const max = Math.max(1, opts.max || 1); const single = max === 1;
+  return new Promise(res => {
+    let result = [];
+    const m = openModal((s, close) => {
+      head(s, opts.level ? `Hae kuva – taso ${opts.level}` : 'Hae kuvia netistä', close);
+      const form = h('form', 'search-form');
+      const inp = h('input'); inp.type = 'search'; inp.placeholder = 'Esim. kissa, auto, kala…'; inp.maxLength = 100;
+      inp.setAttribute('aria-label', 'Hakusana'); inp.enterKeyHint = 'search';
+      const go = h('button', 'btn primary', 'Hae'); go.type = 'submit';
+      form.append(inp, go); s.appendChild(form);
+      s.appendChild(h('p', 'muted', single
+        ? 'Napauta kuvaa valitaksesi sen. Kuvat ovat vapaasti käytettäviä (Openverse). Valittu kuva tallentuu tälle laitteelle.'
+        : `Valitse enintään ${max} kuvaa. Ne lisätään tyhjille tasoille valintajärjestyksessä, pienimmästä tasosta alkaen. Kuvat ovat vapaasti käytettäviä (Openverse) ja tallentuvat tälle laitteelle.`));
+      const err = h('p', 'err'); err.hidden = true; s.appendChild(err);
+      const grid = h('div', 'search-grid'); s.appendChild(grid);
+      const more = h('button', 'btn small', 'Lisää tuloksia'); more.hidden = true; more.style.cssText = 'display:block;margin:10px auto 0';
+      s.appendChild(more);
+      const foot = h('div', 'row search-foot'); foot.hidden = single;
+      const cnt = h('span', 'muted'); cnt.style.flex = '1';
+      const ok = h('button', 'btn primary', 'Lisää valitut'); ok.disabled = true;
+      foot.append(cnt, ok); s.appendChild(foot);
+
+      let q = '', page = 0, busy = false; const sel = [];
+      const upd = () => {
+        cnt.textContent = `Valittu ${sel.length}/${max}`;
+        ok.disabled = !sel.length; ok.textContent = sel.length ? `Lisää valitut (${sel.length})` : 'Lisää valitut';
+        grid.querySelectorAll('.hit').forEach(b => {
+          const i = sel.findIndex(x => x.id === b.dataset.id);
+          b.classList.toggle('on', i >= 0); b.dataset.n = i >= 0 ? i + 1 : '';
+          b.setAttribute('aria-pressed', i >= 0 ? 'true' : 'false');
+        });
+      };
+      const add = items => items.forEach(it => {
+        if (grid.querySelector(`.hit[data-id="${CSS.escape(it.id)}"]`)) return;
+        const b = h('button', 'hit'); b.type = 'button'; b.dataset.id = it.id;
+        b.setAttribute('aria-label', (it.title || 'Kuva') + (it.creator ? ' – ' + it.creator : ''));
+        const img = h('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+        img.onerror = () => b.remove(); img.src = it.thumb; b.appendChild(img);
+        b.onclick = () => {
+          if (single) { result = [it]; close(); return; }
+          const i = sel.findIndex(x => x.id === it.id);
+          if (i >= 0) sel.splice(i, 1);
+          else if (sel.length < max) sel.push(it);
+          else { toast(`Voit valita enintään ${max} kuvaa.`); return; }
+          upd();
+        };
+        grid.appendChild(b);
+      });
+      const load = async () => {
+        if (busy || !q) return; busy = true; err.hidden = true;
+        go.disabled = more.disabled = true; more.textContent = 'Haetaan…';
+        if (!page) grid.innerHTML = '<p class="muted search-msg">Haetaan…</p>';
+        try {
+          const r = await searchImages(q, page + 1);
+          if (!page) grid.innerHTML = '';
+          page++; add(r.items); upd();
+          if (!grid.children.length) grid.innerHTML = '<p class="muted search-msg">Ei tuloksia. Kokeile toista hakusanaa, esim. englanniksi.</p>';
+          more.hidden = !r.hasMore;
+        } catch (e) {
+          if (!page) grid.innerHTML = '';
+          err.textContent = e.message; err.hidden = false;
+        } finally { busy = false; go.disabled = more.disabled = false; more.textContent = 'Lisää tuloksia'; }
+      };
+      form.onsubmit = e => {
+        e.preventDefault(); const v = inp.value.trim(); if (!v) { inp.focus(); return; }
+        inp.blur(); q = v; page = 0; more.hidden = true; load();
+      };
+      more.onclick = load;
+      ok.onclick = () => { result = sel.slice(); close(); };
+      upd(); setTimeout(() => inp.focus(), 30);
+    });
+    m._onclose = () => res(result);
+  });
 }
 
 function openUrlDialog(v, afterOrig) {

@@ -47,12 +47,20 @@ export async function loadActiveImages() {
   listeners.forEach(fn => { try { fn(); } catch (e) {} });
 }
 
-export async function saveLevelImage(pid, v, orig, cr) {
+// meta: netistä haetun kuvan lähdetiedot. undefined = säilytä aiemmat (esim. uudelleenrajaus), null = poista.
+export async function saveLevelImage(pid, v, orig, cr, meta) {
   const im = await loadImg(orig);
   cr = clampCrop(im, cr || { rot: 0, zoom: 1, x: 0, y: 0 });
   const data = renderTileData(im, cr);
+  if (meta === undefined) { const old = await imgDB.get(pid + ':' + v).catch(() => null); meta = old && old.meta || null; }
   await imgDB.put(pid + ':' + v + ':o', orig);
-  await imgDB.put(pid + ':' + v, { data, crop: cr });
+  const rec = { data, crop: cr }; if (meta) rec.meta = meta;
+  await imgDB.put(pid + ':' + v, rec);
+}
+// Lähdetiedot tasoittain: [{ v, meta }]
+export async function levelSources(pid) {
+  const recs = await Promise.all(LEVELS.map(v => imgDB.get(pid + ':' + v).catch(() => null)));
+  return recs.map((r, i) => ({ v: LEVELS[i], meta: r && r.data && r.meta })).filter(x => x.meta);
 }
 export async function removeLevelImage(pid, v) {
   await imgDB.del(pid + ':' + v); await imgDB.del(pid + ':' + v + ':o');

@@ -19,7 +19,7 @@ Asennettu peli aukeaa koko näytölle omana sovelluksenaan ja toimii ilman verkk
 ## Kuvasetit
 
 1. Avaa **Asetukset** (rataskuvake) ja valitse **+ Uusi kuvasetti**.
-2. Lisää jokaiselle tasolle (2–8192) kuva: **Laitteelta** (kuvagalleria tai kamera) tai **Linkki** (suora linkki kuvatiedostoon). **Lisää monta kuvaa kerralla** täyttää tyhjät tasot pienimmästä alkaen.
+2. Lisää jokaiselle tasolle (2–8192) kuva: **Laitteelta** (kuvagalleria tai kamera), **Haku** (kuvahaku netistä) tai **Linkki** (suora linkki kuvatiedostoon). **Lisää monta kuvaa kerralla** ja **🔍 Hae kuvia netistä** täyttävät tyhjät tasot pienimmästä alkaen.
 3. Kuvien järjestystä voi muuttaa jälkikäteen: **▲▼-nuolet** siirtävät kuvan pienemmälle tai isommalle tasolle (vaihtaa paikkaa viereisen tason kanssa), ja **⇅ Käännä järjestys** kääntää kaikki kuvat kerralla. Näin voi esim. laittaa pienimmän kalan tasolle 2 ja isommat kalat isommille tasoille.
 4. Rajausikkunassa kuvaa voi siirtää vetämällä, zoomata kahdella sormella tai liukusäätimellä ja kiertää 90°. Rajausta voi muuttaa myöhemmin napauttamalla kuvaa.
 
@@ -28,6 +28,8 @@ Tasoilla, joilla ei ole kuvaa, näkyy tavallinen numero.
 Kuvasettejä voi olla tallessa useita yhtä aikaa. Käytössä olevan setin voi vaihtaa **Vaihda kuvasettiä** -napilla, joka on pääruudulla Eteneminen-kortissa ja Asetuksissa. Napista aukeaa lista, jossa näkyy jokaisen setin nimi, kuvien määrä ja pieni esikatselu. Listasta voi valita myös tavalliset numerot.
 
 **Kuvat tallentuvat vain sille laitteelle ja selaimelle, jolla ne lisättiin.** Toiselle laitteelle tai kaverille ne siirretään näin: **Vie kuvasetti** (tiedostona tai leikepöydälle tekstinä) ja toisella laitteella **Tuo kuvasetti**.
+
+Kuvahaku käyttää [Openverseä](https://openverse.org), jossa on vapaasti lisensoituja kuvia (Creative Commons ja public domain). Hakuun ei tarvita tunnusta tai avainta, mutta se vaatii verkkoyhteyden. Valitut kuvat tallentuvat laitteelle samalla tavalla kuin laitteelta valitut, joten ne toimivat myös ilman verkkoa. Kuvan nimi, tekijä ja lisenssi tallentuvat mukaan, ja ne näkyvät Asetuksissa kohdassa **Kuvien lähteet**. Monet lisenssit edellyttävät tekijän mainitsemista, jos kuvia jaetaan eteenpäin.
 
 Linkkikuvissa jotkin sivustot eivät salli kuvan käyttöä toisella sivulla. Tallenna silloin kuva ensin laitteelle ja valitse se Laitteelta-napilla.
 
@@ -44,6 +46,7 @@ js/render.js           laudan ja laattojen piirto, animaatiot
 js/storage.js          localStorage- ja IndexedDB-apurit
 js/stats.js            tilastot
 js/profiles.js         kuvasetit, vienti ja tuonti
+js/search.js           kuvahaku (Openverse)
 js/cropper.js          kuvan käsittely ja rajausikkuna
 js/ui.js               modaalit, toast, asetukset- ja tilastot-ikkunat
 js/dom.js              pienet DOM-apurit

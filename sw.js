@@ -1,6 +1,6 @@
 // Service worker: offline-tuki ja päivitykset.
 // HUOM: nosta versiota jokaisessa julkaisussa, jotta käyttäjät saavat uudet tiedostot.
-const CACHE = '2048-v3';
+const CACHE = '2048-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
   './js/profiles.js',
   './js/cropper.js',
   './js/ui.js',
+  './js/search.js',
   './js/dom.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
